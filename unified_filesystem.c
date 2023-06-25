@@ -16,9 +16,9 @@
 
 struct AES_ctx ctx;
 
-static const char *filepath = "/file";
-static const char *filename = "file";
-static const char *filecontent = "I'm the content of the only file available there\n";
+// static const char *filepath = "/file";
+// static const char *filename = "file";
+// static const char *filecontent = "I'm the content of the only file available there\n";
 
 struct drives all_drives, input_drives;
 struct directory root;
@@ -135,7 +135,7 @@ BYTE** split_file(const BYTE* data, size_t size, size_t* part_count) {
     *(part_count) = size / part_size + ((size % part_size != 0) ? 1 : 0);
     BYTE** parts = (BYTE**) malloc(sizeof(BYTE*)*(*part_count));
     for(size_t i = 0;i < *part_count;i++) {
-        parts[i] = malloc(sizeof(BYTE) * part_size);
+        parts[i] = malloc(sizeof(BYTE) * part_size + 1);
     }
     size_t wrote_bytes = 0;
     for(size_t i = 0; i < *part_count; i++) {
@@ -153,31 +153,9 @@ void get_drive_info(char* path, size_t *total, size_t *free) {
     statfs(path, &st);
     *total = st.f_blocks * st.f_bsize;
     *free = st.f_bfree * st.f_bsize;
+    printf("Path: %s Total: %ld, Free: %ld\n", path, *total, *free);
+
 }
-
-
-BYTE* get_metadata(char* file_name, size_t part_count, size_t part_index) {
-    // add metadata to parts
-    // metadata format: <file_name length in 8 bytes (64 bit)> <file name> <part_index in 8 bytes (64 bit)> <part_count in 8 bytes (64 bit)>
-    size_t metadata_size = 8 + strlen(file_name) + 8 + 8;
-    BYTE* metadata = (BYTE*) calloc(metadata_size, sizeof(BYTE));
-
-    // add file name length
-    size_t file_name_length = strlen(file_name);
-    memcpy(metadata, &file_name_length, 8);
-
-    // add file name
-    memcpy(metadata + 8, file_name, strlen(file_name));
-
-    // add part index
-    memcpy(metadata + 8 + strlen(file_name), &part_index, 8);
-
-    // add part count
-    memcpy(metadata + 8 + strlen(file_name) + 8, &part_count, 8);
-
-    return metadata;
-}
-
 
 
 // write each part to drives with checking free space in every iteration 
@@ -222,6 +200,7 @@ void write_to_drives(const BYTE* data, size_t size, struct file* file, char* pat
         BYTE* encrypted_part = encrypt(parts[i], part_size);
         part_size += 16 - (part_size % 16);
         int written_bytes = write(part_file, encrypted_part, part_size); 
+        free(encrypted_part);
 
         if(file->parts == NULL) {
             file->parts =  (struct file_part*) malloc(sizeof(struct file_part) * (file->part_count + 1));
@@ -239,6 +218,10 @@ void write_to_drives(const BYTE* data, size_t size, struct file* file, char* pat
     }
     close(part_file);
     free(part_path);
+    for(size_t i = 0; i < part_count; i++) {
+        free(parts[i]);
+    }
+    free(parts);
     file->size += size;
 }
 
@@ -271,6 +254,9 @@ static int utimens_callback(const char *path, const struct timespec ts[2]) {
         }
     }
 
+    free(file_name);
+    free(rest_of_path);
+
     return 0;
 }
 
@@ -302,6 +288,9 @@ static int create_callback(const char *path, mode_t mode, struct fuse_file_info 
     dir->files[dir->num_files - 1].mode = 0777;
     dir->files[dir->num_files - 1].part_count = 0;
     dir->files[dir->num_files - 1].parts = NULL;
+
+    free(file_name);
+    free(rest_of_path);
 
     return 0;
 }
@@ -338,6 +327,11 @@ static int rename_callback(const char *path, const char *new_path, unsigned int 
         }
     }
 
+    free(file_name);
+    free(rest_of_path);
+    free(new_file_name);
+    free(new_rest_of_path);
+
     return 0;
 }
 
@@ -371,6 +365,8 @@ static int mkdir_callback(const char *path, mode_t mode) {
     dir->children[dir->num_children - 1].files = NULL;
     dir->children[dir->num_children - 1].mode = 0777;
 
+    free(file_name);
+    free(rest_of_path);
     return 0;
 }
 
@@ -383,7 +379,6 @@ static int setattr_callback(const char *path, struct stat *stbuf, int to_set) {
     return 0;
 }
 
-// /merve/ozan/xyz -> /merve/ozan xyz  /merve/ozan/xyz/
 static int getattr_callback(const char *path, struct stat *stbuf) {
     memset(stbuf, 0, sizeof(struct stat));
 
@@ -412,8 +407,12 @@ static int getattr_callback(const char *path, struct stat *stbuf) {
         if(dir != NULL) {
             stbuf->st_mode = S_IFDIR | dir->mode;
             stbuf->st_nlink = 2;
+            free(file_name);
+            free(rest_of_path);
             return 0;
         } else {
+            free(file_name);
+            free(rest_of_path);
             return -ENOENT;
         }
     } else {
@@ -422,6 +421,8 @@ static int getattr_callback(const char *path, struct stat *stbuf) {
         if(dir != NULL) {
             stbuf->st_mode = S_IFDIR | dir->mode;
             stbuf->st_nlink = 2;
+            free(file_name);
+            free(rest_of_path);
             return 0;
         }
 
@@ -432,16 +433,22 @@ static int getattr_callback(const char *path, struct stat *stbuf) {
                 if(strcmp(dir->files[i].file_name, file_name) == 0) {
                     stbuf->st_mode = S_IFREG | dir->files[i].mode;
                     stbuf->st_nlink = 1;
-                    stbuf->st_size = dir->files[i].size;
+                    stbuf->st_size = dir->files[i].size;    
+                    free(file_name);
+                    free(rest_of_path);
                     return 0;
                 }
             }
         } else {
             printf("NOT FOUND\n");
+            free(file_name);
+            free(rest_of_path);
             return -ENOENT;
         }
     }
 
+    free(file_name);
+    free(rest_of_path);
     return -ENOENT;
 }
 
@@ -519,6 +526,7 @@ static int read_callback(const char *path, char *buf, size_t size, off_t offset,
         BYTE* part_data = (BYTE*) malloc(read_size);
         int res = pread(part_file, part_data, read_size, diff);
         BYTE* decrypted_part_data = decrypt(part_data, read_size); 
+        free(part_data);
         
         if(res == -1) {
             perror("pread");
@@ -538,6 +546,8 @@ static int read_callback(const char *path, char *buf, size_t size, off_t offset,
     memcpy(buf, data, size);
 
     free(data);
+    free(file_name);
+    free(remaining_path);
 
     return size;
 }
@@ -566,6 +576,9 @@ static int write_callback(const char *path, const char *buf, size_t size, off_t 
     }
     
     write_to_drives(buf, size, file, remaining_path);
+
+    free(file_name);
+    free(remaining_path);
     
     return size;
 }
@@ -672,4 +685,3 @@ int main(int argc, char *argv[])
 
     return fuse_main(argc_, argv_, &fuse_example_operations, NULL);
 }
-

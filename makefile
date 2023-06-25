@@ -21,5 +21,5 @@ clean:
 	rm unified_filesystem
 
 safe_run:
-	./unified_filesystem --virtual_drive_path /home/zeroday/Desktop/cse496/bitirme/test --hard_drive /media/zeroday/merve
+	./unified_filesystem --virtual_drive_path /home/zeroday/Desktop/cse496/unified-filesystem/test --hard_drive /media/zeroday/merve --hard_drive /media/zeroday/volume
 
