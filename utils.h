@@ -5,10 +5,10 @@
 #include <time.h>
 
 /* 256 bit key */
-uint8_t key[] = { 'o', 'z', 'a', 'n',
-                                'o', 'z', 'a', 'n', 
-                                'o', 'z', 'a', 'n', 
-                                'o', 'z', 'a', 'n' };
+uint8_t key[] = { 'm', 'e', 'r', 'v',
+                                'e', 'm', 'e', 'r', 
+                                'v', 'e', 'm', 'e', 
+                                'r', 'v', 'e', 'm' };
 
 struct Header
 {
@@ -16,11 +16,13 @@ struct Header
     int part_no;
 };
 
+// used to store hard drives paths and number of drives
 struct drives {
     char** paths;
     size_t num;
 };
 
+// used to store file parts
 struct file_part {
     unsigned long timestamp;
     size_t part_no;
@@ -28,7 +30,7 @@ struct file_part {
     size_t size;
 };
 
-
+// used to store file information
 struct file {  
     char* file_name;
     char* file_path;
@@ -42,8 +44,7 @@ struct file {
     struct file_part* parts;
 };
 
-
-
+// used to store directory information
 struct directory {
     struct directory* parent;
     struct directory* children;
@@ -53,6 +54,5 @@ struct directory {
     char* name;
     int mode;
 };
-
 
 typedef char BYTE;
